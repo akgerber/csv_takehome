@@ -3,18 +3,37 @@
 import argparse
 import csv
 from dataclasses import dataclass
+from typing import Union
+from abc import ABC
+
+
+QueryNode = Union['MatchOperator', 'AndOperator', 'OrOperator', None]
 
 @dataclass
 class MatchOperator:
     column_name: str
     matching_value: str
 
-
-QueryNode = MatchOperator | None
+@dataclass
+class UnaryBoolean(ABC):
+    v1: QueryNode
 
 @dataclass
-class ParsedQuery:
-    tree: QueryNode
+class BinaryBoolean(ABC):
+    v1: QueryNode
+    v2: QueryNode
+
+@dataclass
+class NotOperator(UnaryBoolean):
+    pass
+
+@dataclass
+class AndOperator(BinaryBoolean):
+    pass
+
+@dataclass
+class OrOperator(BinaryBoolean):
+    pass
 
 
 @dataclass
@@ -26,33 +45,51 @@ class Row:
 def parse_match_args(args: str) -> MatchOperator | None:
     match_args = args.strip(")").split(",")
     if len(match_args) != 2:
-        return False
+        return None
     return MatchOperator(
         column_name=match_args[0].strip('" '), matching_value=match_args[1].strip('" '))
 
 
-def parse_query(search_query: str) -> ParsedQuery | None:
+def parse_unary_args(op_type: UnaryBoolean, body: str) -> UnaryBoolean | None:
+    return op_type(parse_query(body))
+
+
+def parse_query(search_query: str) -> QueryNode:
     tree = None
-    match search_query.split("("):
-        case "MATCH", body:
+    match search_query.partition("("):
+        case op, "(", body:
             if body[-1] != ")":
                 return None
-            match = parse_match_args(body[:-1])
-            if match is None:
-                return None
-            tree = match
+            match op:
+                case "MATCH":
+                    return parse_match_args(body[:-1])
+                case "NOT":
+                    return parse_unary_args(NotOperator, body)
+                case "AND" | "OR":
+                    return AndOperator(None, None)
+                case "OR":
+                    return OrOperator(None, None)
+                case _:
+                    return None
         case _:
             return None
 
-    return ParsedQuery(tree=tree)
+    return tree
 
     
-def eval_search_query(row: Row, search_query: ParsedQuery) -> bool:
-    if type(search_query.tree) == MatchOperator:
-        matcher: MatchOperator = search_query.tree
+def eval_search_query(row: Row, search_query: QueryNode) -> bool:
+    if isinstance(search_query, MatchOperator):
+        matcher: MatchOperator = search_query
         return matcher.column_name in row.row_dict \
             and row.row_dict[matcher.column_name] == matcher.matching_value
+    elif isinstance(search_query, NotOperator):
+        return not(eval_search_query(row, search_query.v1)) 
+    elif isinstance(search_query, AndOperator):
+        return eval_search_query(row, search_query.v1) and eval_search_query(row, search_query.v2)
+    elif isinstance(search_query, OrOperator):
+        return eval_search_query(row, search_query.v1) or eval_search_query(row, search_query.v2)
     else:
+        print(f"Warning: eval_search_query support not implemented QueryNode type. QueryNode: {type(search_query)}")
         return False
     
 
