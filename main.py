@@ -7,7 +7,7 @@ from typing import Union
 from abc import ABC
 
 
-QueryNode = Union['MatchOperator', 'AndOperator', 'OrOperator', None]
+QueryNode = Union['MatchOperator', 'AndOperator', 'OrOperator']
 
 @dataclass
 class MatchOperator:
@@ -51,18 +51,25 @@ def parse_match_args(args: str) -> MatchOperator | None:
 
 
 def parse_unary_args(op_type: UnaryBoolean, body: str) -> UnaryBoolean | None:
+    parsed_body = parse_query(body)
+    if parsed_body is None:
+        return None
+    return op_type(parsed_body)
+
+
+def parse_binary_args(op_type: BinaryBoolean, body: str) -> BinaryBoolean | None:
     return op_type(parse_query(body))
 
 
-def parse_query(search_query: str) -> QueryNode:
-    tree = None
+def parse_query(search_query: str) -> QueryNode | None:
     match search_query.partition("("):
         case op, "(", body:
             if body[-1] != ")":
                 return None
+            body = body[:-1]
             match op:
                 case "MATCH":
-                    return parse_match_args(body[:-1])
+                    return parse_match_args(body)
                 case "NOT":
                     return parse_unary_args(NotOperator, body)
                 case "AND" | "OR":
@@ -73,8 +80,6 @@ def parse_query(search_query: str) -> QueryNode:
                     return None
         case _:
             return None
-
-    return tree
 
     
 def eval_search_query(row: Row, search_query: QueryNode) -> bool:
