@@ -7,7 +7,7 @@ from typing import Union
 from abc import ABC
 
 
-QueryNode = Union["MatchOperator", "AndOperator", "OrOperator"]
+QueryNode = Union["MatchOperator", "AndOperator", "OrOperator", "NotOperator"]
 
 
 @dataclass
