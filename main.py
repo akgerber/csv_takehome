@@ -24,16 +24,19 @@ class Row:
 
 
 def parse_match_args(args: str) -> MatchOperator | None:
-    match_args = args.split(",")
+    match_args = args.strip(")").split(",")
     if len(match_args) != 2:
         return False
     return MatchOperator(
         column_name=match_args[0].strip('" '), matching_value=match_args[1].strip('" '))
 
+
 def parse_query(search_query: str) -> ParsedQuery | None:
     tree = None
     match search_query.split("("):
         case "MATCH", body:
+            if body[-1] != ")":
+                return None
             match = parse_match_args(body[:-1])
             if match is None:
                 return None
@@ -42,6 +45,7 @@ def parse_query(search_query: str) -> ParsedQuery | None:
             return None
 
     return ParsedQuery(tree=tree)
+
     
 def eval_search_query(row: Row, search_query: ParsedQuery) -> bool:
     if type(search_query.tree) == MatchOperator:
